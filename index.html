@@ -63,6 +63,7 @@ button {
 button:hover { transform: translate(-1px, -1px); box-shadow: 7px 7px 0 var(--ink); }
 button:active { transform: translate(5px, 5px); box-shadow: 1px 1px 0 var(--ink); }
 button:focus-visible { outline: 4px solid var(--cyan); outline-offset: 3px; }
+.sub-btn { font-size: 15px; padding: 10px 16px; background: var(--cyan); color: var(--ink); }
 button:disabled { background: var(--mute); cursor: default; transform: none; box-shadow: 6px 6px 0 var(--ink); }
 .hint { font-size: 12px; color: var(--mute); margin: 0; text-align: center; }
 .side { display: grid; gap: 18px; min-width: 0; }
@@ -108,8 +109,8 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     <div class="boardcol">
       <div class="bubble"><span class="who">親分</span><span id="line">さて、今日はどこにしようかのう。</span></div>
       <div class="canvasbox"><canvas id="board" aria-label="回転するダーツボード"></canvas></div>
-      <div class="controls"><button id="throw" type="button">投げる</button></div>
-      <p class="hint">ボードは高速回転中。刺さったらゆっくり止まります。</p>
+      <div class="controls"><button id="throw" type="button">投げる</button><button id="sound" class="sub-btn" type="button" aria-pressed="true">音 ON</button></div>
+      <p class="hint">ボードは高速回転中。画面に触れるとドラムロールが始まります。</p>
     </div>
 
     <div class="side">
@@ -184,7 +185,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
   resize();
 
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const SPIN = reduce ? 1.2 : 5.5; // rad/s
+  const SPIN = reduce ? 1.5 : 8.5; // rad/s
   let rot = 0, vel = SPIN;
   let phase = "spin"; // spin | flying | stopping | done
   let dart = null; // {lx,ly} local coords (unit = R) when stuck; flight data while flying
@@ -290,7 +291,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     }
   }
 
-  let last = performance.now();
+  let last = performance.now(), lastSec = 0;
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     if (phase === "spin" || phase === "flying") rot += vel * dt;
@@ -301,12 +302,84 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     if (phase === "stopping") {
       rot += vel * dt;
       vel *= Math.pow(0.2, dt);
+      const sec = Math.floor((rot + STEP / 2) / STEP);
+      if (sec !== lastSec) { lastSec = sec; sfxTick(); }
       if (Math.abs(vel) < 0.03) { vel = 0; phase = "done"; reveal(); }
     }
     render();
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
+
+
+  // ---- sound (Web Audio, synthesized) ----
+  let ac = null, master = null, noiseBuf = null, soundOn = true, rollTimer = null, rollNext = 0, rollN = 0;
+  function initAudio() {
+    if (ac) { if (ac.state === "suspended") ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    ac = new AC(); master = ac.createGain(); master.gain.value = soundOn ? 0.7 : 0; master.connect(ac.destination);
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    if (phase === "spin") startRoll();
+  }
+  function noiseHit(t, dur, freq, vol, type = "bandpass") {
+    const src = ac.createBufferSource(); src.buffer = noiseBuf;
+    const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = 0.8;
+    const g = ac.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+  }
+  function tone(t, freq, dur, vol, type = "square", slideTo) {
+    const o = ac.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.setValueAtTime(vol, t + dur * 0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function startRoll() {
+    if (!ac || rollTimer) return;
+    rollNext = ac.currentTime + 0.05; rollN = 0;
+    rollTimer = setInterval(() => {
+      while (rollNext < ac.currentTime + 0.1) {
+        const swell = 0.12 + 0.06 * Math.sin(rollN / 9);
+        noiseHit(rollNext, 0.06, 2200, swell * (rollN % 2 ? 0.75 : 1));
+        rollNext += 1 / 22; rollN++;
+      }
+    }, 25);
+  }
+  function stopRoll() { clearInterval(rollTimer); rollTimer = null; }
+  function sfxThrow() { if (!ac) return; const t = ac.currentTime; noiseHit(t, 0.35, 900, 0.25, "highpass"); }
+  function sfxImpact() {
+    if (!ac) return; const t = ac.currentTime;
+    tone(t, 180, 0.18, 0.5, "sine", 60); noiseHit(t, 0.08, 1200, 0.5);
+    noiseHit(t + 0.02, 1.1, 6000, 0.22, "highpass"); // crash
+  }
+  function sfxTick() { if (!ac) return; tone(ac.currentTime, 1400, 0.03, 0.12, "square"); }
+  function sfxFanfare(big) {
+    if (!ac) return; const t = ac.currentTime + 0.05;
+    const n = [523.25, 659.25, 783.99, 1046.5];
+    [0, 1, 2].forEach((k, i) => tone(t + i * 0.11, n[k], 0.12, 0.18));
+    [0, 1, 2, 3].forEach(k => tone(t + 0.36, n[k], big ? 1.1 : 0.7, 0.11, k % 2 ? "square" : "triangle"));
+    if (big) {
+      [1, 2, 3].forEach((k, i) => tone(t + 1.0 + i * 0.1, n[k] * 2, 0.12, 0.12));
+      [0, 1, 2, 3].forEach(k => tone(t + 1.35, n[k] * 2, 1.2, 0.09, "triangle"));
+      noiseHit(t + 1.35, 1.4, 7000, 0.2, "highpass");
+    }
+  }
+  function sfxMiss() {
+    if (!ac) return; const t = ac.currentTime + 0.05;
+    [[392, 370], [370, 349], [349, 330], [330, 247]].forEach(([a, b], i) =>
+      tone(t + i * 0.42, a, i === 3 ? 1.0 : 0.38, 0.13, "sawtooth", b));
+  }
+  ["pointerdown", "keydown"].forEach(ev => window.addEventListener(ev, initAudio, { passive: true }));
+  const sbtn = document.getElementById("sound");
+  sbtn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    sbtn.textContent = soundOn ? "音 ON" : "音 OFF";
+    sbtn.setAttribute("aria-pressed", String(soundOn));
+    if (master) master.gain.setTargetAtTime(soundOn ? 0.7 : 0, ac.currentTime, 0.02);
+  });
 
   const btn = document.getElementById("throw");
   const line = document.getElementById("line");
@@ -319,6 +392,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
 
   function throwDart() {
     phase = "flying"; btn.disabled = true;
+    stopRoll(); sfxThrow();
     line.textContent = "そりゃっ。";
     // aim: mostly on the board, with a small chance of missing
     const ang = Math.random() * Math.PI * 2;
@@ -342,7 +416,8 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     else if (rr >= 0.47 && rr <= 0.55) { zone = "triple"; mult = 3; }
     else if (rr >= 0.88) { zone = "double"; mult = 2; }
     pending = { idx, zone, mult };
-    phase = "stopping";
+    phase = "stopping"; lastSec = Math.floor((rot + STEP / 2) / STEP);
+    sfxImpact();
     line.textContent = zone === "miss" ? "……あっ。" : "刺さったのう。どれどれ。";
   }
 
@@ -370,6 +445,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       comment.textContent = "本日は平和です。親分は手首を気にしています。";
       line.textContent = "今日は手首の調子が悪いんじゃ。";
       addLog(hh, "（壁）", 0);
+      sfxMiss();
     } else {
       const isBull = zone === "bull" || zone === "outerbull";
       const name = isBull ? (zone === "bull" ? "全社まとめて一斉" : "業界まるごと") : COMPANIES[idx].full;
@@ -387,6 +463,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       comment.textContent = pick(COMMENT);
       line.textContent = isBull ? "ど真ん中じゃ。今日は全部いくぞ。" : (mult > 1 ? "ええとこ入ったのう。倍じゃ倍。" : "よし、次はここじゃ。");
       addLog(hh, isBull ? name : COMPANIES[idx].full, count);
+      sfxFanfare(isBull || mult > 1);
     }
     card.classList.remove("pop"); void card.offsetWidth; card.classList.add("pop");
     btn.textContent = "もう一投"; btn.disabled = false;
@@ -408,6 +485,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
   function reset() {
     dart = null; pending = null;
     vel = SPIN; phase = "spin";
+    startRoll();
     btn.textContent = "投げる";
     line.textContent = pick(LINES_IDLE);
   }
