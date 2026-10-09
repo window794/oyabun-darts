@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>親分ダーツ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&family=DotGothic16&display=swap">
+<style>
+/* Layout: comic-pop single screen — ticker strip, boss speech bubble, spinning board, result card, today's log */
+:root {
+  --paper: #FFE45C;
+  --dot: #F7C933;
+  --ink: #1D1240;
+  --pink: #FF4F8B;
+  --cyan: #2CC6EA;
+  --white: #FFFDF5;
+  --mute: #5B4E7A;
+  --f-display: "Dela Gothic One", "Hiragino Kaku Gothic StdN", "Yu Gothic", sans-serif;
+  --f-body: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
+  --f-data: "DotGothic16", "MS Gothic", monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--paper); color: var(--ink); }
+body {
+  font-family: var(--f-body);
+  font-weight: 500;
+  background-color: var(--paper);
+  background-image: radial-gradient(var(--dot) 1.6px, transparent 1.7px);
+  background-size: 14px 14px;
+  min-height: 100%;
+}
+.ticker {
+  background: var(--ink); color: var(--paper);
+  font-family: var(--f-data); font-size: 15px;
+  overflow: hidden; white-space: nowrap; border-bottom: 4px solid var(--pink);
+}
+.ticker span { display: inline-block; padding: 8px 0; padding-left: 100%; animation: tick 26s linear infinite; }
+@keyframes tick { to { transform: translateX(-100%); } }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; display: grid; gap: 22px; }
+header { display: grid; gap: 6px; }
+.kicker { font-family: var(--f-display); font-size: 14px; letter-spacing: .08em; color: var(--white); background: var(--pink); justify-self: start; padding: 4px 12px; border: 3px solid var(--ink); transform: rotate(-2deg); box-shadow: 3px 3px 0 var(--ink); }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(34px, 7vw, 64px); line-height: 1.05; margin: 6px 0 0; text-wrap: balance; color: var(--ink); text-shadow: 4px 4px 0 var(--cyan); }
+.sub { margin: 0; color: var(--mute); font-size: 14px; }
+.stage { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.boardcol { display: grid; gap: 14px; justify-items: center; }
+.bubble { position: relative; background: var(--white); border: 3px solid var(--ink); border-radius: 22px; padding: 12px 18px; font-weight: 800; font-size: 17px; box-shadow: 5px 5px 0 var(--ink); justify-self: stretch; min-height: 54px; display: flex; align-items: center; gap: 10px; }
+.bubble::after { content: ""; position: absolute; left: 44px; bottom: -16px; width: 22px; height: 22px; background: var(--white); border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink); transform: rotate(45deg) skew(8deg, 8deg); }
+.who { font-family: var(--f-display); font-weight: 400; font-size: 12px; background: var(--ink); color: var(--paper); padding: 2px 8px; border-radius: 99px; flex: none; }
+.canvasbox { width: 100%; max-width: 440px; aspect-ratio: 1 / 1; position: relative; }
+canvas { width: 100%; height: 100%; display: block; }
+.controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+button {
+  font-family: var(--f-display); font-weight: 400; font-size: 22px; letter-spacing: .04em;
+  color: var(--white); background: var(--pink);
+  border: 4px solid var(--ink); border-radius: 16px; padding: 12px 34px;
+  box-shadow: 6px 6px 0 var(--ink); cursor: pointer;
+  transition: transform .08s, box-shadow .08s;
+}
+button:hover { transform: translate(-1px, -1px); box-shadow: 7px 7px 0 var(--ink); }
+button:active { transform: translate(5px, 5px); box-shadow: 1px 1px 0 var(--ink); }
+button:focus-visible { outline: 4px solid var(--cyan); outline-offset: 3px; }
+button:disabled { background: var(--mute); cursor: default; transform: none; box-shadow: 6px 6px 0 var(--ink); }
+.hint { font-size: 12px; color: var(--mute); margin: 0; text-align: center; }
+.side { display: grid; gap: 18px; min-width: 0; }
+.card { background: var(--white); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 8px 8px 0 var(--ink); padding: 18px 20px; min-width: 0; }
+.card h2 { font-family: var(--f-display); font-weight: 400; font-size: 15px; letter-spacing: .1em; margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px; }
+.stamp { font-family: var(--f-data); font-size: 12px; color: var(--mute); letter-spacing: 0; }
+.target { font-family: var(--f-display); font-size: clamp(24px, 4vw, 32px); line-height: 1.2; margin: 0 0 4px; text-wrap: balance; }
+.target.idle { color: var(--mute); font-size: 22px; }
+.mult { display: inline-block; font-family: var(--f-display); font-size: 13px; background: var(--cyan); border: 3px solid var(--ink); border-radius: 99px; padding: 2px 10px; margin-bottom: 12px; }
+.mult[hidden] { display: none; }
+dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 14px; }
+dt { color: var(--mute); font-weight: 800; white-space: nowrap; }
+dd { margin: 0; font-weight: 800; min-width: 0; }
+.num { font-family: var(--f-data); font-size: 20px; font-variant-numeric: tabular-nums; color: var(--pink); }
+.comment { margin: 14px 0 0; padding-top: 12px; border-top: 3px dashed var(--ink); font-size: 14px; }
+.pop { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes pop { from { transform: scale(.85) rotate(-2deg); } to { transform: none; } }
+ol.log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+ol.log li { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding-bottom: 8px; border-bottom: 2px solid var(--dot); }
+ol.log li:last-child { border-bottom: 0; padding-bottom: 0; }
+.t { font-family: var(--f-data); color: var(--mute); font-variant-numeric: tabular-nums; }
+.n { font-weight: 800; overflow-wrap: anywhere; }
+.c { font-family: var(--f-data); color: var(--pink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.empty { color: var(--mute); font-size: 14px; margin: 0; }
+footer { font-size: 12px; color: var(--mute); text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .ticker span { animation: none; padding-left: 16px; }
+  .pop { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="ticker" aria-hidden="true"><span>速報　日替わり！本日の情報漏えい！　ぬるぽ商事で顧客名簿が共有フォルダに全公開　／　うっかり銀行、FAX誤送信で謝罪　／　付箋貼り物産のモニター裏からパスワード発見　／　専門家「admin/adminはやめましょう」　／　※この速報はすべてフィクションです</span></div>
+
+<div class="wrap">
+  <header>
+    <span class="kicker">犯罪結社 定例会議</span>
+    <h1>親分ダーツ</h1>
+    <p class="sub">次に狙う企業は、親分のダーツ一投で決まる。登場する企業はすべて架空です。</p>
+  </header>
+
+  <section class="stage">
+    <div class="boardcol">
+      <div class="bubble"><span class="who">親分</span><span id="line">さて、今日はどこにしようかのう。</span></div>
+      <div class="canvasbox"><canvas id="board" aria-label="回転するダーツボード"></canvas></div>
+      <div class="controls"><button id="throw" type="button">投げる</button></div>
+      <p class="hint">ボードは高速回転中。刺さったらゆっくり止まります。</p>
+    </div>
+
+    <div class="side">
+      <article class="card" id="result" aria-live="polite">
+        <h2>本日の標的 <span class="stamp" id="stamp">未定</span></h2>
+        <p class="target idle" id="tname">まだ投げていません</p>
+        <span class="mult" id="tmult" hidden></span>
+        <dl id="tdetail" hidden>
+          <dt>流出予定件数</dt><dd><span class="num" id="tcount">0</span> 件</dd>
+          <dt>流出するもの</dt><dd id="twhat"></dd>
+          <dt>侵入経路</dt><dd id="troute"></dd>
+          <dt>謝罪会見</dt><dd id="tsorry"></dd>
+        </dl>
+        <p class="comment" id="tcomment" hidden></p>
+      </article>
+
+      <article class="card">
+        <h2>本日の被害者リスト <span class="stamp" id="total">計 0 件</span></h2>
+        <ol class="log" id="log"></ol>
+        <p class="empty" id="logempty">まだ平和です。</p>
+      </article>
+    </div>
+  </section>
+
+  <footer>本アプリはジョークです。実在の企業・団体・事件とは一切関係ありません。</footer>
+</div>
+
+<script>
+(() => {
+  const COMPANIES = [
+    { short: "ぬるぽ商事",     full: "株式会社ぬるぽ商事" },
+    { short: "うっかり銀行",   full: "うっかり銀行" },
+    { short: "PW123 HD",       full: "パスワード123ホールディングス" },
+    { short: "平文保管サービス", full: "平文保管サービス株式会社" },
+    { short: "付箋貼り物産",   full: "付箋貼り物産株式会社" },
+    { short: "共有全開建設",   full: "共有フォルダ全開建設" },
+    { short: "USB紛失運輸",    full: "USBなくし運輸株式会社" },
+    { short: "admin通信",      full: "admin/admin通信" },
+    { short: "誤送信急便",     full: "誤送信メール急便" },
+    { short: "丸見え電機",     full: "クラウド丸見え電機" },
+    { short: "認証ナシ食品",   full: "二段階認証ナシ食品" },
+    { short: "退職者生命",     full: "退職者アカウント生命保険" },
+  ];
+  const WHAT = ["顧客名簿", "社員の昼食注文履歴", "部長の自作ポエム", "平文パスワード一覧", "会議室の予約表", "忘年会のビンゴ景品リスト", "社長のゴルフスコア", "経費精算の言い訳集", "新商品の仮ネーミング案", "社内報の没原稿"];
+  const ROUTE = ["モニター裏の付箋", "退職者のアカウント", "誤送信メール", "公開設定のクラウド", "飲み会帰りに紛失したUSB", "「パスワードを教えてください」電話", "更新されていないWordPress", "受付に置かれた入館証"];
+  const SORRY = ["明日 10:00（深いお辞儀つき）", "来週月曜（原稿は総務が作成中）", "未定（担当者が有休）", "本日夕方（会見場所を誤送信済み）", "やらない方針（炎上予定）"];
+  const LINES_IDLE = ["さて、今日はどこにしようかのう。", "わしの腕はまだ鈍っとらんぞ。", "おい、次の的を持ってこい。"];
+  const COMMENT = [
+    "パスワードは付箋に書かない。それだけで親分は困ります。",
+    "二段階認証を有効にしておけば、親分のダーツは空振りです。",
+    "共有リンクの公開範囲、今いちど確認しましょう。",
+    "退職者のアカウントは、その日のうちに止めましょう。",
+    "メールの宛先は送信前にもう一度。誤送信は親分の大好物です。",
+    "USBの持ち出しルール、守られていますか。",
+  ];
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+
+  const C = { ink: "#1D1240", pink: "#FF4F8B", cyan: "#2CC6EA", white: "#FFFDF5", paper: "#FFE45C", mute: "#5B4E7A", dot: "#F7C933" };
+  const N = COMPANIES.length, STEP = Math.PI * 2 / N;
+
+  const cv = document.getElementById("board");
+  const ctx = cv.getContext("2d");
+  let W = 0, R = 0, dpr = 1;
+  function resize() {
+    const box = cv.parentElement.getBoundingClientRect();
+    dpr = window.devicePixelRatio || 1;
+    W = box.width;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(W * dpr);
+    R = W * 0.42;
+  }
+  new ResizeObserver(resize).observe(cv.parentElement);
+  resize();
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SPIN = reduce ? 1.2 : 5.5; // rad/s
+  let rot = 0, vel = SPIN;
+  let phase = "spin"; // spin | flying | stopping | done
+  let dart = null; // {lx,ly} local coords (unit = R) when stuck; flight data while flying
+  let flight = null;
+
+  function drawBoard() {
+    const cx = W / 2, cy = W / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    // shadow
+    ctx.fillStyle = C.ink;
+    ctx.beginPath(); ctx.arc(7, 8, R * 1.1, 0, Math.PI * 2); ctx.fill();
+    // outer rim
+    ctx.fillStyle = C.ink;
+    ctx.beginPath(); ctx.arc(0, 0, R * 1.1, 0, Math.PI * 2); ctx.fill();
+    ctx.rotate(rot);
+    for (let i = 0; i < N; i++) {
+      const a0 = -Math.PI / 2 + i * STEP - STEP / 2, a1 = a0 + STEP;
+      const base = i % 2 ? C.white : C.paper;
+      const ring = i % 2 ? C.pink : C.cyan;
+      const seg = (r0, r1, col) => {
+        ctx.beginPath(); ctx.arc(0, 0, r1, a0, a1); ctx.arc(0, 0, r0, a1, a0, true); ctx.closePath();
+        ctx.fillStyle = col; ctx.fill();
+      };
+      seg(0, R, base);
+      seg(R * 0.47, R * 0.55, ring);
+      seg(R * 0.88, R, ring);
+    }
+    // sector lines
+    ctx.strokeStyle = C.ink; ctx.lineWidth = Math.max(1.5, R * 0.012);
+    for (let i = 0; i < N; i++) {
+      const a = -Math.PI / 2 + i * STEP - STEP / 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke();
+    }
+    [R, R * 0.88, R * 0.55, R * 0.47].forEach(r => { ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke(); });
+    // labels
+    const fs = Math.max(9, R * 0.075);
+    ctx.font = `800 ${fs}px "M PLUS Rounded 1c", sans-serif`;
+    ctx.fillStyle = C.ink; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    for (let i = 0; i < N; i++) {
+      const a = -Math.PI / 2 + i * STEP;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.translate(R * 0.715, 0);
+      ctx.rotate(Math.PI / 2);
+      ctx.fillText(COMPANIES[i].short, 0, 0, R * 0.5);
+      ctx.restore();
+    }
+    // bull
+    ctx.fillStyle = C.cyan; ctx.beginPath(); ctx.arc(0, 0, R * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.pink; ctx.beginPath(); ctx.arc(0, 0, R * 0.08, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // rim text
+    ctx.fillStyle = C.paper;
+    ctx.font = `400 ${Math.max(9, R * 0.06)}px "Dela Gothic One", sans-serif`;
+    const rim = "TODAY'S  TARGET  ★  ";
+    const chars = (rim + rim + rim).split("");
+    chars.forEach((ch, k) => {
+      const a = (k / chars.length) * Math.PI * 2;
+      ctx.save(); ctx.rotate(a); ctx.translate(0, -R * 1.05); ctx.fillText(ch, 0, 0); ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  function drawDart(x, y, s) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.rotate(-0.35);
+    const L = R * 0.55;
+    ctx.lineJoin = "round";
+    // flights
+    ctx.fillStyle = C.pink; ctx.strokeStyle = C.ink; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, L * 0.72); ctx.lineTo(-L * 0.16, L * 1.02); ctx.lineTo(0, L * 0.94); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.cyan;
+    ctx.beginPath(); ctx.moveTo(0, L * 0.72); ctx.lineTo(L * 0.16, L * 1.02); ctx.lineTo(0, L * 0.94); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // shaft
+    ctx.fillStyle = C.white;
+    ctx.beginPath(); ctx.rect(-L * 0.025, L * 0.3, L * 0.05, L * 0.5); ctx.fill(); ctx.stroke();
+    // barrel
+    ctx.fillStyle = C.ink;
+    ctx.beginPath(); ctx.roundRect(-L * 0.05, L * 0.08, L * 0.1, L * 0.26, L * 0.03); ctx.fill();
+    // tip
+    ctx.strokeStyle = C.mute; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, L * 0.09); ctx.lineTo(0, 0); ctx.stroke();
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, W);
+    drawBoard();
+    const cx = W / 2, cy = W / 2;
+    if (phase === "flying" && flight) {
+      const t = flight.t;
+      const e = 1 - Math.pow(1 - t, 3);
+      const x = flight.sx + (flight.tx - flight.sx) * e;
+      const y = flight.sy + (flight.ty - flight.sy) * e - Math.sin(t * Math.PI) * W * 0.12;
+      drawDart(x, y, 1.9 - 0.9 * e);
+    } else if (dart) {
+      const c = Math.cos(rot), s = Math.sin(rot);
+      const wx = (dart.lx * c - dart.ly * s) * R + cx, wy = (dart.lx * s + dart.ly * c) * R + cy;
+      drawDart(wx, wy, 1);
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (phase === "spin" || phase === "flying") rot += vel * dt;
+    if (phase === "flying") {
+      flight.t = Math.min(1, flight.t + dt / 0.5);
+      if (flight.t >= 1) impact();
+    }
+    if (phase === "stopping") {
+      rot += vel * dt;
+      vel *= Math.pow(0.2, dt);
+      if (Math.abs(vel) < 0.03) { vel = 0; phase = "done"; reveal(); }
+    }
+    render();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  const btn = document.getElementById("throw");
+  const line = document.getElementById("line");
+  let pending = null;
+
+  btn.addEventListener("click", () => {
+    if (phase === "spin") throwDart();
+    else if (phase === "done") reset();
+  });
+
+  function throwDart() {
+    phase = "flying"; btn.disabled = true;
+    line.textContent = "そりゃっ。";
+    // aim: mostly on the board, with a small chance of missing
+    const ang = Math.random() * Math.PI * 2;
+    const rr = Math.random() < 0.06 ? 1.04 + Math.random() * 0.1 : Math.sqrt(Math.random()) * 0.97;
+    flight = { t: 0, sx: W * 0.5 + (Math.random() - 0.5) * W * 0.3, sy: W * 1.05,
+               tx: W / 2 + Math.cos(ang) * rr * R, ty: W / 2 + Math.sin(ang) * rr * R, rr, ang };
+  }
+
+  function impact() {
+    const { ang, rr } = flight;
+    const la = ang - rot;
+    dart = { lx: Math.cos(la) * rr, ly: Math.sin(la) * rr };
+    flight = null;
+    // which sector
+    let a = (la + Math.PI / 2) % (Math.PI * 2); if (a < 0) a += Math.PI * 2;
+    const idx = Math.round(a / STEP) % N;
+    let zone = "single", mult = 1;
+    if (rr > 1) zone = "miss";
+    else if (rr < 0.08) { zone = "bull"; mult = 50; }
+    else if (rr < 0.16) { zone = "outerbull"; mult = 25; }
+    else if (rr >= 0.47 && rr <= 0.55) { zone = "triple"; mult = 3; }
+    else if (rr >= 0.88) { zone = "double"; mult = 2; }
+    pending = { idx, zone, mult };
+    phase = "stopping";
+    line.textContent = zone === "miss" ? "……あっ。" : "刺さったのう。どれどれ。";
+  }
+
+  const logEl = document.getElementById("log");
+  const logEmpty = document.getElementById("logempty");
+  let total = 0;
+  const fmt = n => n.toLocaleString("ja-JP");
+
+  function reveal() {
+    const { idx, zone, mult } = pending;
+    const card = document.getElementById("result");
+    const tname = document.getElementById("tname");
+    const tmult = document.getElementById("tmult");
+    const detail = document.getElementById("tdetail");
+    const comment = document.getElementById("tcomment");
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    document.getElementById("stamp").textContent = now.toLocaleDateString("ja-JP") + " " + hh;
+    tname.classList.remove("idle");
+
+    if (zone === "miss") {
+      tname.textContent = "壁に刺さった";
+      tmult.hidden = true; detail.hidden = true;
+      comment.hidden = false;
+      comment.textContent = "本日は平和です。親分は手首を気にしています。";
+      line.textContent = "今日は手首の調子が悪いんじゃ。";
+      addLog(hh, "（壁）", 0);
+    } else {
+      const isBull = zone === "bull" || zone === "outerbull";
+      const name = isBull ? (zone === "bull" ? "全社まとめて一斉" : "業界まるごと") : COMPANIES[idx].full;
+      tname.textContent = name;
+      const labels = { double: "DOUBLE　被害×2", triple: "TRIPLE　被害×3", outerbull: "OUTER BULL　被害×25", bull: "BULLSEYE　被害×50" };
+      tmult.hidden = !labels[zone]; tmult.textContent = labels[zone] || "";
+      const base = Math.round((Math.random() ** 2) * 2400000 + 800);
+      const count = base * mult;
+      document.getElementById("tcount").textContent = fmt(count);
+      document.getElementById("twhat").textContent = pick(WHAT);
+      document.getElementById("troute").textContent = pick(ROUTE);
+      document.getElementById("tsorry").textContent = pick(SORRY);
+      detail.hidden = false;
+      comment.hidden = false;
+      comment.textContent = pick(COMMENT);
+      line.textContent = isBull ? "ど真ん中じゃ。今日は全部いくぞ。" : (mult > 1 ? "ええとこ入ったのう。倍じゃ倍。" : "よし、次はここじゃ。");
+      addLog(hh, isBull ? name : COMPANIES[idx].full, count);
+    }
+    card.classList.remove("pop"); void card.offsetWidth; card.classList.add("pop");
+    btn.textContent = "もう一投"; btn.disabled = false;
+  }
+
+  function addLog(t, name, count) {
+    total += count;
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="t"></span><span class="n"></span><span class="c"></span>`;
+    li.children[0].textContent = t;
+    li.children[1].textContent = name;
+    li.children[2].textContent = count ? fmt(count) + "件" : "—";
+    logEl.prepend(li);
+    while (logEl.children.length > 8) logEl.lastChild.remove();
+    logEmpty.hidden = true;
+    document.getElementById("total").textContent = "計 " + fmt(total) + " 件";
+  }
+
+  function reset() {
+    dart = null; pending = null;
+    vel = SPIN; phase = "spin";
+    btn.textContent = "投げる";
+    line.textContent = pick(LINES_IDLE);
+  }
+})();
+</script>
+</body>
+</html>
