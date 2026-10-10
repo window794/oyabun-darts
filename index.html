@@ -145,16 +145,22 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
         <button type="button" role="tab" id="m-countup" data-mode="countup" aria-selected="false">カウントアップ</button>
         <button type="button" role="tab" id="m-zeroone" data-mode="zeroone" aria-selected="false">01（501）</button>
       </div>
-      <div class="bubble"><span class="who">親分</span><span id="line">さて、今日はどこにしようかのう。</span></div>
+      <div class="bubble"><span class="who" id="speaker">親分</span><span id="line">さて、今日はどこにしようかのう。</span></div>
       <div class="canvasbox"><canvas id="board" aria-label="ダーツボード。タップした所を狙って投げます"></canvas></div>
       <div class="controls">
         <button id="throw" class="big" type="button">投げる</button>
         <button id="sound" class="small" type="button" aria-pressed="true">音 ON</button>
-        <label class="cond" for="cond">親分の調子
+        <label class="cond" id="condWrap" for="cond">親分の調子
           <select id="cond">
             <option value="0.05">絶好調</option>
             <option value="0.1" selected>ふつう</option>
             <option value="0.19">二日酔い</option>
+          </select>
+        </label>
+        <label class="cond" id="whoWrap" for="who" hidden>投げる人
+          <select id="who">
+            <option value="boss" selected>親分</option>
+            <option value="pro">子分テツ（元プロ）</option>
           </select>
         </label>
       </div>
@@ -341,7 +347,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     drawBoard();
     const cx = W / 2, cy = W / 2, c = Math.cos(rot), s = Math.sin(rot);
     darts.forEach(d => drawDart((d.lx * c - d.ly * s) * R + cx, (d.lx * s + d.ly * c) * R + cy, 1));
-    if (hover && mode !== "target" && phase === "ready") {
+    if (hover && mode !== "target" && phase === "ready" && !isPro()) {
       ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.arc(hover.x, hover.y, R * sigma() * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); ctx.moveTo(hover.x - 8, hover.y); ctx.lineTo(hover.x + 8, hover.y); ctx.moveTo(hover.x, hover.y - 8); ctx.lineTo(hover.x, hover.y + 8); ctx.stroke();
@@ -449,13 +455,17 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
   const line = document.getElementById("line");
   const hint = document.getElementById("hint");
   const condSel = document.getElementById("cond");
-  const sigma = () => parseFloat(condSel.value);
+  const whoSel = document.getElementById("who");
+  const speaker = document.getElementById("speaker");
+  const isPro = () => mode === "countup" && whoSel.value === "pro";
+  const sigma = () => isPro() ? 0.03 : parseFloat(condSel.value);
+  function say(text, who = "親分") { line.textContent = text; speaker.textContent = who; }
   const gauss = () => { let u = 0; while (!u) u = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random()); };
   const canThrow = () => phase === "spin" || phase === "ready";
 
   function throwAt(tx, ty) {
     if (!canThrow()) return;
-    if (mode === "target") { stopRoll(); btn.disabled = true; line.textContent = "そりゃっ。"; }
+    if (mode === "target") { stopRoll(); btn.disabled = true; say("そりゃっ。"); }
     phase = "flying";
     sfxThrow();
     flight = { t: 0, sx: W * 0.5 + (Math.random() - 0.5) * W * 0.3, sy: W * 1.05, tx, ty };
@@ -495,7 +505,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       pendingTarget = hit;
       phase = "stopping"; lastSec = Math.floor((rot + STEP / 2) / STEP);
       sfxImpact(true);
-      line.textContent = hit.miss ? "……あっ。" : "刺さったのう。どれどれ。";
+      say(hit.miss ? "……あっ。" : "刺さったのう。どれどれ。");
     } else {
       sfxImpact(false);
       gameHit(hit);
@@ -504,7 +514,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
 
   function localPoint(e) { const b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) * W / b.width, y: (e.clientY - b.top) * W / b.height }; }
   cv.addEventListener("pointerdown", e => {
-    if (!canThrow()) return;
+    if (!canThrow() || isPro()) return;
     const p = localPoint(e);
     aimAndThrow(p.x, p.y);
   });
@@ -516,6 +526,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       if (phase === "spin") randomTargetThrow();
       else if (phase === "done") resetTarget();
     } else {
+      if (isPro()) { if (phase === "ready") { G.auto = true; proThrow(); } else if (phase === "over") startGame(mode); return; }
       if (phase === "ready") aimT20();
       else if (phase === "roundEnd") nextRound();
       else if (phase === "over") startGame(mode);
@@ -567,7 +578,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       tname.textContent = "壁に刺さった";
       tmult.hidden = true; detail.hidden = true; comment.hidden = false;
       comment.textContent = "本日は平和です。親分は手首を気にしています。";
-      line.textContent = "今日は手首の調子が悪いんじゃ。";
+      say("今日は手首の調子が悪いんじゃ。");
       sfxMiss();
     } else {
       const mult = h.bull ? 50 : h.mult;
@@ -581,7 +592,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       document.getElementById("tsorry").textContent = pick(SORRY);
       detail.hidden = false; comment.hidden = false;
       comment.textContent = pick(COMMENT);
-      line.textContent = h.bull ? "ど真ん中じゃ。今日は全部いくぞ。" : (mult > 1 ? "ええとこ入ったのう。倍じゃ倍。" : "よし、次はここじゃ。");
+      say(h.bull ? "ど真ん中じゃ。今日は全部いくぞ。" : (mult > 1 ? "ええとこ入ったのう。倍じゃ倍。" : "よし、次はここじゃ。"));
       addLeak(h, count);
       sfxFanfare(mult > 1);
     }
@@ -592,25 +603,34 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     darts = []; pendingTarget = null;
     vel = SPIN; phase = "spin";
     btn.textContent = "投げる"; btn.disabled = false;
-    line.textContent = pick(LINES_IDLE);
+    say(pick(LINES_IDLE));
     startRoll();
   }
 
   // ---------- modes: count-up / 01 ----------
   const G = {};
+  let autoTimer = null;
+  function proThrow() {
+    if (!isPro() || phase !== "ready") return;
+    if (Math.random() < 0.12) aimT20(); else aimAndThrow(W / 2, W / 2);
+  }
   const el = id => document.getElementById(id);
   function startGame(m) {
     Object.assign(G, {
       mode: m, round: 1, maxRounds: m === "countup" ? 8 : 15,
       cur: [], rounds: [], score: m === "countup" ? 0 : 501, roundStart: 501,
-      thrown: 0, scored: 0, win: false,
+      thrown: 0, scored: 0, win: false, auto: false,
     });
+    clearTimeout(autoTimer);
     darts = []; rot = 0; vel = 0; phase = "ready";
     el("gtitle").textContent = m === "countup" ? "カウントアップ" : "01（501）";
     el("glabel").textContent = m === "countup" ? "合計スコア" : "今月のノルマ残り";
     el("final").hidden = true; el("award").hidden = true;
-    line.textContent = m === "countup" ? "8ラウンドでどれだけ稼げるか、見ときなさい。" : "今月のノルマは501万件。ぴったりで頼むぞ。";
-    hint.textContent = m === "countup"
+    say(m === "countup" ? "8ラウンドでどれだけ稼げるか、見ときなさい。" : "今月のノルマは501万件。ぴったりで頼むぞ。");
+    if (isPro()) {
+      say("テツ、見せてやれ。");
+      hint.textContent = "元プロの子分テツが8ラウンド通しで投げます。ソフトダーツのカウントアップはブル狙いが定石。";
+    } else hint.textContent = m === "countup"
       ? "盤をタップした所を狙って投げます。親分の手ブレでずれます。1ラウンド3投×8ラウンド。"
       : "501からぴったり0で上がり。超えたらバーストでそのラウンドは無効。最大15ラウンド。盤をタップして狙います。";
     updateGameUI();
@@ -627,7 +647,8 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     }
     addLeak(h, h.pts * 10000);
     sfxBlip(G.cur.length - 1);
-    line.textContent = h.miss ? "……今のは練習じゃ。" : h.bull ? "ど真ん中じゃ。" : h.mult === 3 ? `トリプル${h.num}。${CO[h.num][0]}は運が悪かったのう。` : `${hitLabel(h)}、${CO[h.num][0]}。`;
+    say(h.miss ? "……今のは練習じゃ。" : h.bull ? "ど真ん中じゃ。" : h.mult === 3 ? `トリプル${h.num}。${CO[h.num][0]}は運が悪かったのう。` : `${hitLabel(h)}、${CO[h.num][0]}。`);
+    if (isPro()) say(h.bull ? pick(["ブル。", "はい、ブル。", "定石ですけえ。", "ブルです。"]) : h.mult === 3 && h.num === 20 ? "ちょっと遊びました。" : "……今のは手が滑りました。", "テツ");
     if (bust) return endRound(true);
     if (finished || G.cur.length === 3) return endRound(false);
     phase = "ready";
@@ -654,7 +675,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       aw.hidden = false; aw.classList.add("bust");
       el("awardT").textContent = "BUST";
       el("awardS").textContent = `やりすぎて足がつく。このラウンドの ${fmt(pts * 10000)}件 は無かったことに`;
-      line.textContent = "やりすぎじゃ。足がつくぞ。";
+      say("やりすぎじゃ。足がつくぞ。");
       sfxMiss();
     } else {
       const a = awardFor(G.cur, pts);
@@ -662,6 +683,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       if (a) {
         aw.hidden = false; el("awardT").textContent = a[0]; el("awardS").textContent = a[1];
         if (!G.win) sfxFanfare(a[2]);
+        if (isPro() && a[2]) say(pick(["……わしより上手いのう。", "テツ、お前なんで足洗ってこっちに来たんじゃ。", "もうええ、もうええ。"]));
       } else aw.hidden = true;
     }
     if (!aw.hidden) { aw.classList.remove("pop"); void aw.offsetWidth; aw.classList.add("pop"); }
@@ -674,27 +696,31 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     darts = []; G.cur = []; G.round++; G.roundStart = G.score;
     el("award").hidden = true;
     phase = "ready";
-    line.textContent = pick(["次じゃ次。", "ダーツを抜いてこい。", "まだまだいくぞ。"]);
+    if (isPro()) say(pick(["次いきます。", "抜いてきました。", "……"]), "テツ");
+    else say(pick(["次じゃ次。", "ダーツを抜いてこい。", "まだまだいくぞ。"]));
     updateGameUI();
   }
   function finishGame() {
     const f = el("final"); f.hidden = false;
     if (G.mode === "countup") {
       const s = G.score;
-      const tiers = [[900, "伝説の親分"], [700, "若頭"], [500, "幹部候補"], [300, "中堅"], [0, "下っ端"]];
+      const tiers = isPro()
+        ? [[1200, "元プロの本気"], [1000, "現役復帰レベル"], [800, "腕がなまった元プロ"], [0, "ただの子分"]]
+        : [[900, "伝説の親分"], [700, "若頭"], [500, "幹部候補"], [300, "中堅"], [0, "下っ端"]];
       el("finalT").textContent = `${fmt(s)}点　${tiers.find(t => s >= t[0])[1]}`;
       el("finalS").textContent = `本日の流出 ${fmt(s * 10000)}件。最高は1440点（全部トリプル20）。`;
-      line.textContent = s >= 700 ? "今日のわしは冴えとるのう。" : s >= 400 ? "まあまあじゃな。" : "……今日は風が強かった。";
+      if (isPro()) say(s >= 1000 ? "……テツ、明日からお前が親分じゃ。" : "プロも人の子じゃのう。安心したわ。");
+      else say(s >= 700 ? "今日のわしは冴えとるのう。" : s >= 400 ? "まあまあじゃな。" : "……今日は風が強かった。");
       sfxFanfare(s >= 700);
     } else if (G.win) {
       el("finalT").textContent = `${G.round}ラウンドでノルマ達成`;
       el("finalS").textContent = "501万件、ぴったり。経理も大満足です。";
-      line.textContent = "ノルマ達成じゃ。今夜は寿司じゃ。";
+      say("ノルマ達成じゃ。今夜は寿司じゃ。");
       sfxFanfare(true);
     } else {
       el("finalT").textContent = "時間切れ";
       el("finalS").textContent = `ノルマ残り ${fmt(G.score * 10000)}件。月末に怒られます。`;
-      line.textContent = "……来月は本気出す。";
+      say("……来月は本気出す。");
       sfxMiss();
     }
     f.classList.remove("pop"); void f.offsetWidth; f.classList.add("pop");
@@ -723,8 +749,17 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     }
     el("ppd").textContent = "PPD " + (G.thrown ? (G.scored / G.thrown).toFixed(2) : "—");
     el("darts").textContent = `${G.thrown}本`;
-    btn.textContent = phase === "roundEnd" ? "ダーツを抜く" : phase === "over" ? "もう一回" : "T20を狙って投げる";
-    btn.disabled = false;
+    if (isPro()) {
+      btn.textContent = phase === "over" ? "もう一回" : G.auto ? "テツが投げています" : "テツに投げさせる";
+      btn.disabled = G.auto && phase !== "over";
+      clearTimeout(autoTimer);
+      if (G.auto && phase === "ready") autoTimer = setTimeout(proThrow, 700);
+      else if (G.auto && phase === "roundEnd") autoTimer = setTimeout(nextRound, 1500);
+      else if (phase === "over") G.auto = false;
+    } else {
+      btn.textContent = phase === "roundEnd" ? "ダーツを抜く" : phase === "over" ? "もう一回" : "T20を狙って投げる";
+      btn.disabled = false;
+    }
   }
 
   // ---------- mode switching ----------
@@ -735,13 +770,16 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     tabs.forEach(t => t.setAttribute("aria-selected", String(t.dataset.mode === m)));
     el("result").hidden = m !== "target";
     el("game").hidden = m === "target";
-    stopRoll();
+    stopRoll(); clearTimeout(autoTimer); G.auto = false;
+    el("whoWrap").hidden = m !== "countup";
+    el("condWrap").hidden = isPro();
     if (m === "target") {
       hint.textContent = "ボードは高速回転中。画面に触れるとドラムロールが始まります。盤をタップすると、そこを狙って投げます。";
       resetTarget();
     } else startGame(m);
   }
   tabs.forEach(t => t.addEventListener("click", () => setMode(t.dataset.mode)));
+  whoSel.addEventListener("change", () => { if (phase !== "flying") setMode(mode); });
   const hashMode = { countup: "countup", zeroone: "zeroone" }[location.hash.slice(1)];
   if (hashMode) setMode(hashMode);
 })();
