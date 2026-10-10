@@ -150,7 +150,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       <div class="controls">
         <button id="throw" class="big" type="button">投げる</button>
         <button id="sound" class="small" type="button" aria-pressed="true">音 ON</button>
-        <label class="cond" id="condWrap" for="cond">親分の調子
+        <label class="cond" id="condWrap" for="cond"><span id="condLbl">親分の調子</span>
           <select id="cond">
             <option value="0.05">絶好調</option>
             <option value="0.1" selected>ふつう</option>
@@ -626,13 +626,14 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     el("gtitle").textContent = m === "countup" ? "カウントアップ" : "01（501）";
     el("glabel").textContent = m === "countup" ? "合計スコア" : "今月のノルマ残り";
     el("final").hidden = true; el("award").hidden = true;
-    say(m === "countup" ? "8ラウンドでどれだけ稼げるか、見ときなさい。" : "今月のノルマは501万件。ぴったりで頼むぞ。");
+    el("condLbl").textContent = m === "zeroone" ? "ヤスの調子" : "親分の調子";
+    say(m === "countup" ? "8ラウンドでどれだけ稼げるか、見ときなさい。" : "今月のノルマは501万件じゃ。ヤス、ぴったりで頼むぞ。");
     if (isPro()) {
       say("テツ、見せてやれ。");
       hint.textContent = "元プロの子分テツが8ラウンド通しで投げます。ソフトダーツのカウントアップはブル狙いが定石。";
     } else hint.textContent = m === "countup"
       ? "盤をタップした所を狙って投げます。親分の手ブレでずれます。1ラウンド3投×8ラウンド。"
-      : "501からぴったり0で上がり。超えたらバーストでそのラウンドは無効。最大15ラウンド。盤をタップして狙います。";
+      : "投げるのは子分のヤス。親分の課したノルマ501からぴったり0で上がり。超えたらバーストでそのラウンドは無効。最大15ラウンド。盤をタップして狙います。";
     updateGameUI();
   }
   function gameHit(h) {
@@ -648,6 +649,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     addLeak(h, h.pts * 10000);
     sfxBlip(G.cur.length - 1);
     say(h.miss ? "……今のは練習じゃ。" : h.bull ? "ど真ん中じゃ。" : h.mult === 3 ? `トリプル${h.num}。${CO[h.num][0]}は運が悪かったのう。` : `${hitLabel(h)}、${CO[h.num][0]}。`);
+    if (G.mode === "zeroone") say(h.miss ? "すんません、外しました……" : h.bull ? "ブル入りました！" : h.mult === 3 ? `トリプル${h.num}、${CO[h.num][0]}いきました！` : `${hitLabel(h)}、${CO[h.num][0]}です。`, "ヤス");
     if (isPro()) say(h.bull ? pick(["ブル。", "はい、ブル。", "定石ですけえ。", "ブルです。"]) : h.mult === 3 && h.num === 20 ? "ちょっと遊びました。" : "……今のは手が滑りました。", "テツ");
     if (bust) return endRound(true);
     if (finished || G.cur.length === 3) return endRound(false);
@@ -675,7 +677,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
       aw.hidden = false; aw.classList.add("bust");
       el("awardT").textContent = "BUST";
       el("awardS").textContent = `やりすぎて足がつく。このラウンドの ${fmt(pts * 10000)}件 は無かったことに`;
-      say("やりすぎじゃ。足がつくぞ。");
+      say("やりすぎじゃ、ヤス。足がつくぞ。");
       sfxMiss();
     } else {
       const a = awardFor(G.cur, pts);
@@ -697,6 +699,7 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     el("award").hidden = true;
     phase = "ready";
     if (isPro()) say(pick(["次いきます。", "抜いてきました。", "……"]), "テツ");
+    else if (G.mode === "zeroone") say(pick(["次いきます！", "抜いてきました！", "今度こそ……！"]), "ヤス");
     else say(pick(["次じゃ次。", "ダーツを抜いてこい。", "まだまだいくぞ。"]));
     updateGameUI();
   }
@@ -715,12 +718,12 @@ footer { font-size: 12px; color: var(--mute); text-align: center; }
     } else if (G.win) {
       el("finalT").textContent = `${G.round}ラウンドでノルマ達成`;
       el("finalS").textContent = "501万件、ぴったり。経理も大満足です。";
-      say("ノルマ達成じゃ。今夜は寿司じゃ。");
+      say("ようやった、ヤス。今夜は寿司じゃ。");
       sfxFanfare(true);
     } else {
       el("finalT").textContent = "時間切れ";
-      el("finalS").textContent = `ノルマ残り ${fmt(G.score * 10000)}件。月末に怒られます。`;
-      say("……来月は本気出す。");
+      el("finalS").textContent = `ノルマ残り ${fmt(G.score * 10000)}件。月末にヤスが怒られます。`;
+      say("ヤス……来月こそ頼むぞ。");
       sfxMiss();
     }
     f.classList.remove("pop"); void f.offsetWidth; f.classList.add("pop");
